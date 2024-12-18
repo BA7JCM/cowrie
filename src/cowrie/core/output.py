@@ -33,7 +33,8 @@ import re
 import socket
 import time
 from os import environ
-from typing import Any, Pattern
+from typing import Any
+from re import Pattern
 
 from twisted.internet import reactor
 from twisted.logger import formatTime
@@ -157,7 +158,6 @@ class Output(metaclass=abc.ABCMeta):
         - 'message' or 'format'
         """
         sessionno: str
-        ev: dict
 
         # Ignore stdout and stderr in output plugins
         if "printed" in event:
@@ -192,7 +192,7 @@ class Output(metaclass=abc.ABCMeta):
 
         if "format" in ev and ("message" not in ev or ev["message"] == ()):
             try:
-                ev["message"] = ev["format"] % ev
+                ev["message"] = ev["format"] % ev  # type: ignore
                 del ev["format"]
             except Exception:
                 pass
@@ -224,6 +224,9 @@ class Output(metaclass=abc.ABCMeta):
                     sessionno = f"S{sshmatch.groups()[0]}"
             if sessionno == "0":
                 return
+        else:
+            print(f"Can't determine sessionno: {ev!r}")  # noqa: T201
+            return
 
         if sessionno in self.ips:
             ev["src_ip"] = self.ips[sessionno]

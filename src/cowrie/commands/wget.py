@@ -7,10 +7,11 @@ import getopt
 import ipaddress
 import os
 import time
-from typing import Any, Optional
+from typing import Any
+from urllib import parse
 
 from twisted.internet import error
-from twisted.python import compat, log
+from twisted.python import log
 from twisted.web.iweb import UNKNOWN_LENGTH
 
 import treq
@@ -31,7 +32,7 @@ def tdiff(seconds: int) -> str:
     minutes = int(t / 60)
     t -= minutes * 60
 
-    s = "%ds" % (int(t),)
+    s = f"{t}s"
     if minutes >= 1:
         s = f"{minutes}m {s}"
     if hours >= 1:
@@ -46,7 +47,7 @@ def sizeof_fmt(num: float) -> str:
         if num < 1024.0:
             return f"{num}{x}"
         num /= 1024.0
-    raise Exception
+    raise ValueError
 
 
 # Luciano Ramalho @ http://code.activestate.com/recipes/498181/
@@ -64,8 +65,10 @@ class Command_wget(HoneyPotCommand):
     limit_size: int = CowrieConfig.getint("honeypot", "download_limit_size", fallback=0)
     quiet: bool = False
 
-    outfile: Optional[str] = None  # outfile is the file saved inside the honeypot
-    artifact: Artifact  # artifact is the file saved for forensics in the real file system
+    outfile: str | None = None  # outfile is the file saved inside the honeypot
+    artifact: (
+        Artifact  # artifact is the file saved for forensics in the real file system
+    )
     currentlength: int = 0  # partial size during download
     totallength: int = 0  # total length
     proglen: int = 0
@@ -111,7 +114,7 @@ class Command_wget(HoneyPotCommand):
         if "://" not in url:
             url = f"http://{url}"
 
-        urldata = compat.urllib_parse.urlparse(url)
+        urldata = parse.urlparse(url)
 
         if urldata.hostname:
             self.host = urldata.hostname
@@ -139,9 +142,7 @@ class Command_wget(HoneyPotCommand):
             path = os.path.dirname(self.outfile)  # type: ignore
             if not path or not self.fs.exists(path) or not self.fs.isdir(path):
                 self.errorWrite(
-                    "wget: {}: Cannot open: No such file or directory\n".format(
-                        self.outfile
-                    )
+                    f"wget: {self.outfile}: Cannot open: No such file or directory\n"
                 )
                 self.exit()
                 return
@@ -244,11 +245,11 @@ class Command_wget(HoneyPotCommand):
             spercent = f"{percent}%"
             eta = (self.totallength - self.currentlength) / self.speed
         else:
-            spercent = f"{self.currentlength / 1000}K"
+            spercent = f"{self.currentlength / 1000:3.0f}K"
             percent = 0
             eta = 0.0
 
-        s = "\r%s [%s] %s %dK/s  eta %s" % (
+        s = "\r{} [{}] {} {:3.1f}K/s  eta {}".format(
             spercent.rjust(3),
             ("%s>" % (int(39.0 / 100.0 * percent) * "=")).ljust(39),
             splitthousands(str(int(self.currentlength))).ljust(12),
@@ -273,8 +274,7 @@ class Command_wget(HoneyPotCommand):
 
         if not self.quiet:
             self.errorWrite(
-                "\r100%%[%s] %s %dK/s"
-                % (
+                "\r100% [{}] {} {:3.1f}K/s".format(
                     "%s>" % (38 * "="),
                     splitthousands(str(int(self.totallength))).ljust(12),
                     self.speed / 1000,
@@ -282,8 +282,7 @@ class Command_wget(HoneyPotCommand):
             )
             self.errorWrite("\n\n")
             self.errorWrite(
-                "%s (%d KB/s) - `%s' saved [%d/%d]\n\n"
-                % (
+                "{} ({:3.2f} KB/s) - `{}' saved [{}/{}]\n\n".format(
                     time.strftime("%Y-%m-%d %H:%M:%S"),
                     self.speed / 1000,
                     self.outfile,
@@ -293,9 +292,14 @@ class Command_wget(HoneyPotCommand):
             )
 
         # Update the honeyfs to point to artifact file if output is to file
-        if self.outfile:
-            self.fs.mkfile(self.outfile, 0, 0, self.currentlength, 33188)
-            self.fs.chown(self.outfile, self.protocol.user.uid, self.protocol.user.gid)
+        if self.outfile and self.protocol.user:
+            self.fs.mkfile(
+                self.outfile,
+                self.protocol.user.uid,
+                self.protocol.user.gid,
+                self.currentlength,
+                33188,
+            )
             self.fs.update_realfile(
                 self.fs.getfile(self.outfile), self.artifact.shasumFilename
             )

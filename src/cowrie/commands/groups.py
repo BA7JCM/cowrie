@@ -36,11 +36,11 @@ class Command_groups(HoneyPotCommand):
                 )
                 return
 
-            for vars in opts:
-                if vars[0] == "-h" or vars[0] == "--help":
+            for opt in opts:
+                if opt[0] == "-h" or opt[0] == "--help":
                     self.write(GROUPS_HELP)
                     return
-                elif vars[0] == "-v" or vars[0] == "--version":
+                elif opt[0] == "-v" or opt[0] == "--version":
                     self.write(GROUPS_VERSION)
                     return
 
@@ -51,6 +51,7 @@ class Command_groups(HoneyPotCommand):
         else:
             content = self.fs.file_contents("/etc/group")
             self.output(content, "")
+
     def output(self, file_content, username):
         groups_string = bytes("", encoding="utf-8")
         if not username:
@@ -77,7 +78,6 @@ class Command_groups(HoneyPotCommand):
         self.writeBytes(groups_string + b"\n")
 
     def check_valid_user(self, username):
-
         usr_byte = bytes(username, encoding="utf-8")
         users = self.fs.file_contents("/etc/shadow")
         lines = users.split(b"\n")

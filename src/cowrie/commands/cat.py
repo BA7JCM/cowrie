@@ -9,7 +9,6 @@ from __future__ import annotations
 
 
 import getopt
-from typing import Optional
 
 from twisted.python import log
 
@@ -61,10 +60,7 @@ class Command_cat(HoneyPotCommand):
 
                 try:
                     contents = self.fs.file_contents(pname)
-                    if contents:
-                        self.output(contents)
-                    else:
-                        raise FileNotFound
+                    self.output(contents)
                 except FileNotFound:
                     self.errorWrite(f"cat: {arg}: No such file or directory\n")
             self.exit()
@@ -72,7 +68,7 @@ class Command_cat(HoneyPotCommand):
             self.output(self.input_data)
             self.exit()
 
-    def output(self, inb: Optional[bytes]) -> None:
+    def output(self, inb: bytes | None) -> None:
         """
         This is the cat output, with optional line numbering
         """

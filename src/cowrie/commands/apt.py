@@ -6,12 +6,15 @@ from __future__ import annotations
 
 import random
 import re
-from typing import Any, Callable, Optional
+from typing import Any, TYPE_CHECKING
 
 from twisted.internet import defer, reactor
 from twisted.internet.defer import inlineCallbacks
 
 from cowrie.shell.command import HoneyPotCommand
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 commands = {}
 
@@ -33,7 +36,7 @@ class Command_aptget(HoneyPotCommand):
     Any installed packages, places a 'Segfault' at /usr/bin/PACKAGE.'''
     """
 
-    packages: dict[str, dict[str, Any]] = {}
+    packages: dict[str, dict[str, Any]]
 
     def start(self) -> None:
         if len(self.args) == 0:
@@ -46,8 +49,9 @@ class Command_aptget(HoneyPotCommand):
             self.do_moo()
         else:
             self.do_locked()
+        self.packages = {}
 
-    def sleep(self, time: float, time2: Optional[float] = None) -> defer.Deferred:
+    def sleep(self, time: float, time2: float | None = None) -> defer.Deferred:
         d: defer.Deferred = defer.Deferred()
         if time2:
             time = random.randint(int(time * 100), int(time2 * 100.0)) / 100.0
@@ -129,9 +133,7 @@ pages for more information and options.
 
         for y in [re.sub("[^A-Za-z0-9]", "", x) for x in self.args[1:]]:
             self.packages[y] = {
-                "version": "{}.{}-{}".format(
-                    random.choice([0, 1]), random.randint(1, 40), random.randint(1, 10)
-                ),
+                "version": f"{random.choice([0, 1])}.{random.randint(1, 40)}-{random.randint(1, 10)}",
                 "size": random.randint(100, 900),
             }
         totalsize: int = sum(self.packages[x]["size"] for x in self.packages)
@@ -140,22 +142,20 @@ pages for more information and options.
         self.write("Building dependency tree\n")
         self.write("Reading state information... Done\n")
         self.write("The following NEW packages will be installed:\n")
-        self.write("  %s " % " ".join(self.packages) + "\n")
+        self.write("  {} ".format(" ".join(self.packages)) + "\n")
         self.write(
-            "0 upgraded, %d newly installed, 0 to remove and 259 not upgraded.\n"
-            % len(self.packages)
+            f"0 upgraded, {len(self.packages)} newly installed, 0 to remove and 259 not upgraded.\n"
         )
-        self.write("Need to get %s.2kB of archives.\n" % (totalsize))
+        self.write(f"Need to get {totalsize}.2kB of archives.\n")
         self.write(
-            "After this operation, {:.1f}kB of additional disk space will be used.\n".format(
-                totalsize * 2.2
-            )
+            f"After this operation, {totalsize * 2.2:.1f}kB of additional disk space will be used.\n"
         )
         i = 1
         for p in self.packages:
             self.write(
-                "Get:%d http://ftp.debian.org stable/main %s %s [%s.2kB]\n"
-                % (i, p, self.packages[p]["version"], self.packages[p]["size"])
+                "Get:{} http://ftp.debian.org stable/main {} {} [{}.2kB]\n".format(
+                    i, p, self.packages[p]["version"], self.packages[p]["size"]
+                )
             )
             i += 1
             yield self.sleep(1, 2)
@@ -180,10 +180,16 @@ pages for more information and options.
             self.write(
                 "Setting up {} ({}) ...\n".format(p, self.packages[p]["version"])
             )
-            self.fs.mkfile("/usr/bin/%s" % p, 0, 0, random.randint(10000, 90000), 33188)
-            self.protocol.commands[
-                "/usr/bin/%s" % p
-            ] = Command_faked_package_class_factory.getCommand(p)
+            self.fs.mkfile(
+                f"/usr/bin/{p}",
+                self.protocol.user.uid,
+                self.protocol.user.gid,
+                random.randint(10000, 90000),
+                33188,
+            )
+            self.protocol.commands[f"/usr/bin/{p}"] = (
+                Command_faked_package_class_factory.getCommand(p)
+            )
             yield self.sleep(2)
         self.exit()
 
@@ -206,4 +212,8 @@ pages for more information and options.
 
 
 commands["/usr/bin/apt-get"] = Command_aptget
+commands["/bin/apt-get"] = Command_aptget
 commands["apt-get"] = Command_aptget
+commands["/usr/bin/apt"] = Command_aptget
+commands["/bin/apt"] = Command_aptget
+commands["apt"] = Command_aptget

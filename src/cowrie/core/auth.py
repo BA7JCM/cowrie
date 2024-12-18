@@ -7,12 +7,14 @@ This module contains authentication code
 
 from __future__ import annotations
 
+import configparser
 import json
 import re
 from collections import OrderedDict
 from os import path
 from random import randint
-from typing import Any, Pattern, Union
+from typing import Any
+from re import Pattern
 
 from twisted.python import log
 
@@ -35,7 +37,7 @@ class UserDB:
 
     def __init__(self) -> None:
         self.userdb: dict[
-            tuple[Union[Pattern[bytes], bytes], Union[Pattern[bytes], bytes]], bool
+            tuple[Pattern[bytes] | bytes, Pattern[bytes] | bytes], bool
         ] = OrderedDict()
         self.load()
 
@@ -69,8 +71,8 @@ class UserDB:
         self, thelogin: bytes, thepasswd: bytes, src_ip: str = "0.0.0.0"
     ) -> bool:
         for credentials, policy in self.userdb.items():
-            login: Union[bytes, Pattern[bytes]]
-            passwd: Union[bytes, Pattern[bytes]]
+            login: bytes | Pattern[bytes]
+            passwd: bytes | Pattern[bytes]
             login, passwd = credentials
 
             if self.match_rule(login, thelogin):
@@ -79,14 +81,12 @@ class UserDB:
 
         return False
 
-    def match_rule(
-        self, rule: Union[bytes, Pattern[bytes]], data: bytes
-    ) -> Union[bool, bytes]:
+    def match_rule(self, rule: bytes | Pattern[bytes], data: bytes) -> bool | bytes:
         if isinstance(rule, bytes):
             return rule in [b"*", data]
         return bool(rule.search(data))
 
-    def re_or_bytes(self, rule: bytes) -> Union[Pattern[bytes], bytes]:
+    def re_or_bytes(self, rule: bytes) -> Pattern[bytes] | bytes:
         """
         Convert a /.../ type rule to a regex, otherwise return the string as-is
 
@@ -128,18 +128,20 @@ class AuthRandom:
 
     def __init__(self) -> None:
         # Default values
-        self.mintry: int = 2
-        self.maxtry: int = 5
-        self.maxcache: int = 10
+        self.mintry: int
+        self.maxtry: int
+        self.maxcache: int
 
-        # Are there auth_class parameters?
-        if CowrieConfig.has_option("honeypot", "auth_class_parameters"):
+        try:
             parameters: str = CowrieConfig.get("honeypot", "auth_class_parameters")
             parlist: list[str] = parameters.split(",")
-            if len(parlist) == 3:
-                self.mintry = int(parlist[0])
-                self.maxtry = int(parlist[1])
-                self.maxcache = int(parlist[2])
+            self.mintry = int(parlist[0])
+            self.maxtry = int(parlist[1])
+            self.maxcache = int(parlist[2])
+        except configparser.Error:
+            self.mintry = 2
+            self.maxtry = 5
+            self.maxcache = 10
 
         if self.maxtry < self.mintry:
             self.maxtry = self.mintry + 1

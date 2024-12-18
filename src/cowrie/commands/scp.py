@@ -48,7 +48,7 @@ class Command_scp(HoneyPotCommand):
     scp command
     """
 
-    download_path = CowrieConfig.get("honeypot", "download_path")
+    download_path = CowrieConfig.get("honeypot", "download_path", fallback=".")
     download_path_uniq = CowrieConfig.get(
         "honeypot", "download_path_uniq", fallback=download_path
     )
@@ -161,11 +161,9 @@ class Command_scp(HoneyPotCommand):
             pos += 1
 
             if re.match(rb"^C0[\d]{3} [\d]+ [^\s]+$", header):
-
                 r = re.search(rb"C(0[\d]{3}) ([\d]+) ([^\s]+)", header)
 
                 if r and r.group(1) and r.group(2) and r.group(3):
-
                     dend = pos + int(r.group(2))
 
                     if dend > len(data):
@@ -181,7 +179,13 @@ class Command_scp(HoneyPotCommand):
                     outfile = self.fs.resolve_path(fname, self.protocol.cwd)
 
                     try:
-                        self.fs.mkfile(outfile, 0, 0, r.group(2), r.group(1))
+                        self.fs.mkfile(
+                            outfile,
+                            self.protocol.user.uid,
+                            self.protocol.user.gid,
+                            r.group(2),
+                            r.group(1),
+                        )
                     except fs.FileNotFound:
                         # The outfile locates at a non-existing directory.
                         self.errorWrite(f"-scp: {outfile}: No such file or directory\n")

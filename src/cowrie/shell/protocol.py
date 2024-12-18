@@ -4,15 +4,18 @@
 
 from __future__ import annotations
 
+from importlib import import_module
 import os
 import socket
 import sys
 import time
 import traceback
+from typing import ClassVar
 
 from twisted.conch import recvline
 from twisted.conch.insults import insults
 from twisted.internet import error
+from twisted.internet.protocol import connectionDone
 from twisted.protocols.policies import TimeoutMixin
 from twisted.python import failure, log
 
@@ -26,12 +29,10 @@ class HoneyPotBaseProtocol(insults.TerminalProtocol, TimeoutMixin):
     Base protocol for interactive and non-interactive use
     """
 
-    commands = {}
+    commands: ClassVar[dict] = {}
     for c in cowrie.commands.__all__:
         try:
-            module = __import__(
-                f"cowrie.commands.{c}", globals(), locals(), ["commands"]
-            )
+            module = import_module(f"cowrie.commands.{c}")
             commands.update(module.commands)
         except ImportError as e:
             exc_type, exc_value, exc_traceback = sys.exc_info()
@@ -119,7 +120,7 @@ class HoneyPotBaseProtocol(insults.TerminalProtocol, TimeoutMixin):
         ret = failure.Failure(error.ProcessTerminated(exitCode=1))
         self.terminal.transport.processEnded(ret)
 
-    def connectionLost(self, reason):
+    def connectionLost(self, reason: failure.Failure = connectionDone) -> None:
         """
         Called when the connection is shut down.
         Clear any circular references here, and any external references to
@@ -166,7 +167,7 @@ class HoneyPotBaseProtocol(insults.TerminalProtocol, TimeoutMixin):
                     break
 
         txt = os.path.normpath(
-            "{}/txtcmds/{}".format(CowrieConfig.get("honeypot", "share_path"), path)
+            "{}/txtcmds/{}".format(CowrieConfig.get("honeypot", "data_path"), path)
         )
         if os.path.exists(txt) and os.path.isfile(txt):
             return self.txtcmd(txt)
@@ -189,6 +190,8 @@ class HoneyPotBaseProtocol(insults.TerminalProtocol, TimeoutMixin):
             self.cmdstack[-1].lineReceived(string)
         else:
             log.msg(f"discarding input {string}")
+            stat = failure.Failure(error.ProcessDone(status=""))
+            self.terminal.transport.processEnded(stat)
 
     def call_command(self, pp, cmd, *args):
         self.pp = pp
@@ -230,7 +233,7 @@ class HoneyPotExecProtocol(HoneyPotBaseProtocol):
         try:
             self.execcmd = execcmd.decode("utf8")
         except UnicodeDecodeError:
-            log.err(f"Unusual execcmd: {repr(execcmd)}")
+            log.err(f"Unusual execcmd: {execcmd!r}")
 
         HoneyPotBaseProtocol.__init__(self, avatar)
 
@@ -240,7 +243,7 @@ class HoneyPotExecProtocol(HoneyPotBaseProtocol):
         self.cmdstack = [honeypot.HoneyPotShell(self, interactive=False)]
         # TODO: quick and dirty fix to deal with \n separated commands
         # HoneypotShell() needs a rewrite to better work with pending input
-        self.cmdstack[0].lineReceived("; ".join(self.execcmd.split("\n")))
+        self.cmdstack[0].lineReceived("; ".join(self.execcmd.strip().split("\n")))
 
     def keystrokeReceived(self, keyID, modifier):
         self.input_data += keyID
@@ -289,10 +292,11 @@ class HoneyPotInteractiveProtocol(HoneyPotBaseProtocol, recvline.HistoricRecvLin
         """
         this logs out when connection times out
         """
+        assert self.terminal is not None
         self.terminal.write(b"timed out waiting for input: auto-logout\n")
         HoneyPotBaseProtocol.timeoutConnection(self)
 
-    def connectionLost(self, reason):
+    def connectionLost(self, reason: failure.Failure = connectionDone) -> None:
         HoneyPotBaseProtocol.connectionLost(self, reason)
         recvline.HistoricRecvLine.connectionLost(self, reason)
         self.keyHandlers = {}
@@ -318,14 +322,15 @@ class HoneyPotInteractiveProtocol(HoneyPotBaseProtocol, recvline.HistoricRecvLin
             self.lineBuffer[self.lineBufferIndex : self.lineBufferIndex + 1] = [ch]
         self.lineBufferIndex += 1
         if not self.password_input:
+            assert self.terminal is not None
             self.terminal.write(ch)
 
-    def handle_RETURN(self):
+    def handle_RETURN(self) -> None:
         if len(self.cmdstack) == 1:
             if self.lineBuffer:
                 self.historyLines.append(b"".join(self.lineBuffer))
             self.historyPosition = len(self.historyLines)
-        return recvline.RecvLine.handle_RETURN(self)
+        recvline.RecvLine.handle_RETURN(self)
 
     def handle_CTRL_C(self) -> None:
         if self.cmdstack:
@@ -340,6 +345,7 @@ class HoneyPotInteractiveProtocol(HoneyPotBaseProtocol, recvline.HistoricRecvLin
             self.cmdstack[-1].handle_TAB()
 
     def handle_CTRL_K(self) -> None:
+        assert self.terminal is not None
         self.terminal.eraseToLineEnd()
         self.lineBuffer = self.lineBuffer[0 : self.lineBufferIndex]
 
@@ -348,11 +354,13 @@ class HoneyPotInteractiveProtocol(HoneyPotBaseProtocol, recvline.HistoricRecvLin
         Handle a 'form feed' byte - generally used to request a screen
         refresh/redraw.
         """
+        assert self.terminal is not None
         self.terminal.eraseDisplay()
         self.terminal.cursorHome()
         self.drawInputLine()
 
     def handle_CTRL_U(self) -> None:
+        assert self.terminal is not None
         for _ in range(self.lineBufferIndex):
             self.terminal.cursorBackward()
             self.terminal.deleteCharacter()

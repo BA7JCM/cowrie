@@ -12,8 +12,9 @@ import time
 import uuid
 
 from twisted.conch.telnet import AlreadyNegotiating, TelnetTransport
+from twisted.internet.protocol import connectionDone
 from twisted.protocols.policies import TimeoutMixin
-from twisted.python import log
+from twisted.python import failure, log
 
 from cowrie.core.config import CowrieConfig
 
@@ -22,6 +23,7 @@ class CowrieTelnetTransport(TelnetTransport, TimeoutMixin):
     """
     CowrieTelnetTransport
     """
+
     def connectionMade(self):
         self.transportId: str = uuid.uuid4().hex[:12]
         sessionno = self.transport.sessionno
@@ -38,7 +40,7 @@ class CowrieTelnetTransport(TelnetTransport, TimeoutMixin):
             dst_ip=self.transport.getHost().host,
             dst_port=self.transport.getHost().port,
             session=self.transportId,
-            sessionno=f"T{str(sessionno)}",
+            sessionno=f"T{sessionno!s}",
             protocol="telnet",
         )
         TelnetTransport.connectionMade(self)
@@ -54,15 +56,16 @@ class CowrieTelnetTransport(TelnetTransport, TimeoutMixin):
         """
         self.transport.write(data.replace(b"\r\n", b"\n"))
 
-    def timeoutConnection(self):
+    def timeoutConnection(self) -> None:
         """
         Make sure all sessions time out eventually.
         Timeout is reset when authentication succeeds.
         """
         log.msg("Timeout reached in CowrieTelnetTransport")
-        self.transport.loseConnection()
+        if self.transport:
+            self.transport.loseConnection()
 
-    def connectionLost(self, reason):
+    def connectionLost(self, reason: failure.Failure = connectionDone) -> None:
         """
         Fires on pre-authentication disconnects
         """
@@ -106,7 +109,6 @@ class CowrieTelnetTransport(TelnetTransport, TimeoutMixin):
             # Should the connection be terminated instead?
             # The telnetd package on Ubuntu (netkit-telnet) does all negotiation before sending the login prompt,
             # but does handle client-initiated negotiation at any time.
-        return None  # This Failure has been handled, no need to continue processing errbacks
 
     def _chainNegotiation(self, res, func, option):
         return func(option).addErrback(self._handleNegotiationError, func, option)

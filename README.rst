@@ -22,7 +22,7 @@ to another system.
 Documentation
 ****************************************
 
-The Documentation can be found `here <https://cowrie.readthedocs.io/en/latest/index.html>`_.
+The Documentation can be found `here <https://docs.cowrie.org/en/latest/index.html>`_.
 
 Slack
 *****************************************
@@ -62,7 +62,8 @@ Docker versions are available.
 
 * On Docker Hub: https://hub.docker.com/r/cowrie/cowrie
 
-* Configuring Cowrie in Docker
+Configuring Cowrie in Docker
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Cowrie in Docker can be configured using environment variables. The
 variables start with COWRIE_ then have the section name in capitals,
@@ -84,7 +85,7 @@ Requirements
 
 Software required to run locally:
 
-* Python 3.8+
+* Python 3.9+
 * python-virtualenv
 
 For Python dependencies, see `requirements.txt <https://github.com/cowrie/cowrie/blob/master/requirements.txt>`_.
@@ -92,19 +93,20 @@ For Python dependencies, see `requirements.txt <https://github.com/cowrie/cowrie
 Files of interest:
 *****************************************
 
-* `etc/cowrie.cfg` - Cowrie's configuration file. Default values can be found in `etc/cowrie.cfg.dist <https://github.com/cowrie/cowrie/blob/master/etc/cowrie.cfg.dist>`_.
-* `share/cowrie/fs.pickle` - fake filesystem
+* `etc/cowrie.cfg` - Cowrie's configuration file.
+* `etc/cowrie.cfg.dist <https://github.com/cowrie/cowrie/blob/master/etc/cowrie.cfg.dist>`_ - default settings, don't change this file
 * `etc/userdb.txt` - credentials to access the honeypot
-* `honeyfs/ <https://github.com/cowrie/cowrie/tree/master/honeyfs>`_ - file contents for the fake filesystem - feel free to copy a real system here or use `bin/fsctl`
+* `src/cowrie/data/fs.pickle` - fake filesystem, this only contains metadata (path, uid, gid, size)
+* `honeyfs/ <https://github.com/cowrie/cowrie/tree/master/honeyfs>`_ - contents for the fake filesystem
 * `honeyfs/etc/issue.net` - pre-login banner
 * `honeyfs/etc/motd <https://github.com/cowrie/cowrie/blob/master/honeyfs/etc/issue>`_ - post-login banner
-* `var/log/cowrie/cowrie.json` - transaction output in JSON format
+* `src/cowrie/data/txtcmds/` - output for simple fake commands
+* `var/log/cowrie/cowrie.json` - audit output in JSON format
 * `var/log/cowrie/cowrie.log` - log/debug output
 * `var/lib/cowrie/tty/` - session logs, replayable with the `bin/playlog` utility.
 * `var/lib/cowrie/downloads/` - files transferred from the attacker to the honeypot are stored here
-* `share/cowrie/txtcmds/ <https://github.com/cowrie/cowrie/tree/master/share/cowrie/txtcmds>`_ - file contents for simple fake commands
-* `bin/createfs <https://github.com/cowrie/cowrie/blob/master/bin/createfs>`_ - used to create the fake filesystem
-* `bin/playlog <https://github.com/cowrie/cowrie/blob/master/bin/playlog>`_ - utility to replay session logs
+* `bin/createfs` - create your own fake filesystem
+* `bin/playlog` - utility to replay session logs
 
 Contributors
 ***************

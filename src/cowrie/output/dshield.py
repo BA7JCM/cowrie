@@ -2,6 +2,7 @@
 Send SSH logins to SANS DShield.
 See https://isc.sans.edu/ssh.html
 """
+
 from __future__ import annotations
 
 
@@ -26,6 +27,7 @@ class Output(cowrie.core.output.Output):
     """
     dshield output
     """
+
     debug: bool = False
     userid: str
     batch_size: int
@@ -41,20 +43,20 @@ class Output(cowrie.core.output.Output):
     def stop(self):
         pass
 
-    def write(self, entry):
+    def write(self, event):
         if (
-            entry["eventid"] == "cowrie.login.success"
-            or entry["eventid"] == "cowrie.login.failed"
+            event["eventid"] == "cowrie.login.success"
+            or event["eventid"] == "cowrie.login.failed"
         ):
-            date = dateutil.parser.parse(entry["timestamp"])
+            date = dateutil.parser.parse(event["timestamp"])
             self.batch.append(
                 {
                     "date": str(date.date()),
                     "time": date.time().strftime("%H:%M:%S"),
                     "timezone": time.strftime("%z"),
-                    "source_ip": entry["src_ip"],
-                    "user": entry["username"],
-                    "password": entry["password"],
+                    "source_ip": event["src_ip"],
+                    "user": event["username"],
+                    "password": event["password"],
                 }
             )
 
@@ -104,7 +106,7 @@ class Output(cowrie.core.output.Output):
         headers = {"X-ISC-Authorization": auth_header, "Content-Type": "text/plain"}
 
         if self.debug:
-            log.msg(f"dshield: posting: {repr(headers)}")
+            log.msg(f"dshield: posting: {headers!r}")
             log.msg(f"dshield: posting: {log_output}")
 
         req = threads.deferToThread(
@@ -131,16 +133,12 @@ class Output(cowrie.core.output.Output):
                 sha1_local.update(log_output.encode("utf8"))
                 if sha1_match is None:
                     log.msg(
-                        "dshield: ERROR: Could not find sha1checksum in response: {}".format(
-                            repr(response)
-                        )
+                        f"dshield: ERROR: Could not find sha1checksum in response: {response!r}"
                     )
                     failed = True
                 elif sha1_match.group(1) != sha1_local.hexdigest():
                     log.msg(
-                        "dshield: ERROR: SHA1 Mismatch {} {} .".format(
-                            sha1_match.group(1), sha1_local.hexdigest()
-                        )
+                        f"dshield: ERROR: SHA1 Mismatch {sha1_match.group(1)} {sha1_local.hexdigest()} ."
                     )
                     failed = True
 
@@ -153,9 +151,7 @@ class Output(cowrie.core.output.Output):
                     failed = True
                 elif md5_match.group(1) != md5_local.hexdigest():
                     log.msg(
-                        "dshield: ERROR: MD5 Mismatch {} {} .".format(
-                            md5_match.group(1), md5_local.hexdigest()
-                        )
+                        f"dshield: ERROR: MD5 Mismatch {md5_match.group(1)} {md5_local.hexdigest()} ."
                     )
                     failed = True
 

@@ -5,6 +5,7 @@ This output plugin is not like the others.
 It has its own emit() function and does not use cowrie eventid's
 to avoid circular calls
 """
+
 from __future__ import annotations
 
 
@@ -49,7 +50,7 @@ class Output(cowrie.core.output.Output):
         """
         pass
 
-    def write(self, entry):
+    def write(self, event):
         """
         events are done in emit() not in write()
         """

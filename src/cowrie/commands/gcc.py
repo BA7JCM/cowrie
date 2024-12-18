@@ -9,10 +9,13 @@ import re
 import time
 
 from twisted.internet import reactor
-from twisted.internet.defer import Deferred
 
 from cowrie.core.config import CowrieConfig
 from cowrie.shell.command import HoneyPotCommand
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from twisted.internet.defer import Deferred
 
 commands = {}
 
@@ -53,7 +56,7 @@ class Command_gcc(HoneyPotCommand):
 
     scheduled: Deferred
 
-    def start(self) -> None:
+    def call(self) -> None:
         """
         Parse as much as possible from a GCC syntax and generate the output
         that is requested. The file that is generated can be read (and will)
@@ -148,17 +151,16 @@ class Command_gcc(HoneyPotCommand):
 
     def no_files(self) -> None:
         """
-        Notify user there are no input files, and exit
+        Notify user there are no input files
         """
         self.write(
             """gcc: fatal error: no input files
 compilation terminated.\n"""
         )
-        self.exit()
 
     def version(self, short: bool) -> None:
         """
-        Print long or short version, and exit
+        Print long or short version
         """
 
         # Generate version number
@@ -166,26 +168,21 @@ compilation terminated.\n"""
         version_short = ".".join([str(v) for v in Command_gcc.APP_VERSION[:2]])
 
         if short:
-            data = """{} (Debian {}-8) {}
+            data = f"""{Command_gcc.APP_NAME} (Debian {version}-8) {version}
 Copyright (C) 2010 Free Software Foundation, Inc.
 This is free software; see the source for copying conditions.  There is NO
-warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.""".format(
-                Command_gcc.APP_NAME, version, version
-            )
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE."""
         else:
-            data = """Using built-in specs.
+            data = f"""Using built-in specs.
 COLLECT_GCC=gcc
 COLLECT_LTO_WRAPPER=/usr/lib/gcc/x86_64-linux-gnu/4.7/lto-wrapper
 Target: x86_64-linux-gnu
-Configured with: ../src/configure -v --with-pkgversion=\'Debian {}-5\' --with-bugurl=file:///usr/share/doc/gcc-{}/README.Bugs --enable-languages=c,c++,fortran,objc,obj-c++ --prefix=/usr --program-suffix=-{} --enable-shared --enable-multiarch --enable-linker-build-id --with-system-zlib --libexecdir=/usr/lib --without-included-gettext --enable-threads=posix --with-gxx-include-dir=/usr/include/c++/{} --libdir=/usr/lib --enable-nls --enable-clocale=gnu --enable-libstdcxx-debug --enable-objc-gc --with-arch-32=i586 --with-tune=generic --enable-checking=release --build=x86_64-linux-gnu --host=x86_64-linux-gnu --target=x86_64-linux-gnu
+Configured with: ../src/configure -v --with-pkgversion=\'Debian {version}-5\' --with-bugurl=file:///usr/share/doc/gcc-{version_short}/README.Bugs --enable-languages=c,c++,fortran,objc,obj-c++ --prefix=/usr --program-suffix=-{version_short} --enable-shared --enable-multiarch --enable-linker-build-id --with-system-zlib --libexecdir=/usr/lib --without-included-gettext --enable-threads=posix --with-gxx-include-dir=/usr/include/c++/{version_short} --libdir=/usr/lib --enable-nls --enable-clocale=gnu --enable-libstdcxx-debug --enable-objc-gc --with-arch-32=i586 --with-tune=generic --enable-checking=release --build=x86_64-linux-gnu --host=x86_64-linux-gnu --target=x86_64-linux-gnu
 Thread model: posix
-gcc version {} (Debian {}-5)""".format(
-                version, version_short, version_short, version_short, version, version
-            )
+gcc version {version} (Debian {version}-5)"""
 
         # Write
         self.write(f"{data}\n")
-        self.exit()
 
     def generate_file(self, outfile: str) -> None:
         data = b""
@@ -197,7 +194,7 @@ gcc version {} (Debian {}-5)""".format(
             re.sub("[^A-Za-z0-9]", "_", outfile),
         )
         safeoutfile = os.path.join(
-            CowrieConfig.get("honeypot", "download_path"), tmp_fname
+            CowrieConfig.get("honeypot", "download_path", fallback="."), tmp_fname
         )
 
         # Data contains random garbage from an actual file, so when
@@ -216,9 +213,10 @@ gcc version {} (Debian {}-5)""".format(
         outfile = self.fs.resolve_path(outfile, self.protocol.cwd)
 
         # Create file for the protocol
-        self.fs.mkfile(outfile, 0, 0, len(data), 33188)
+        self.fs.mkfile(
+            outfile, self.protocol.user.uid, self.protocol.user.gid, len(data), 33188
+        )
         self.fs.update_realfile(self.fs.getfile(outfile), safeoutfile)
-        self.fs.chown(outfile, self.protocol.user.uid, self.protocol.user.gid)
 
         # Segfault command
         class segfault_command(HoneyPotCommand):
@@ -228,15 +226,11 @@ gcc version {} (Debian {}-5)""".format(
         # Trick the 'new compiled file' as an segfault
         self.protocol.commands[outfile] = segfault_command
 
-        # Done
-        self.exit()
-
     def arg_missing(self, arg: str) -> None:
         """
         Print missing argument message, and exit
         """
         self.write(f"{Command_gcc.APP_NAME}: argument to '{arg}' is missing\n")
-        self.exit()
 
     def help(self) -> None:
         """
@@ -306,11 +300,10 @@ For bug reporting instructions, please see:
 <file:///usr/share/doc/gcc-4.7/README.Bugs>.
 """
         )
-        self.exit()
 
 
 commands["/usr/bin/gcc"] = Command_gcc
 commands["gcc"] = Command_gcc
 commands[
-    "/usr/bin/gcc-%s" % (".".join([str(v) for v in Command_gcc.APP_VERSION[:2]]))
+    "/usr/bin/gcc-{}".format(".".join([str(v) for v in Command_gcc.APP_VERSION[:2]]))
 ] = Command_gcc

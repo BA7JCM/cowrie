@@ -7,9 +7,10 @@ from configparser import NoOptionError
 
 from twisted.python import log
 
+from cowrie.core.config import CowrieConfig
+
 import backend_pool.libvirt.snapshot_handler
 import backend_pool.util
-from cowrie.core.config import CowrieConfig
 
 
 class QemuGuestError(Exception):
@@ -23,7 +24,7 @@ def create_guest(connection, mac_address, guest_unique_id):
     # get guest configurations
     configuration_file: str = os.path.join(
         CowrieConfig.get(
-            "backend_pool", "config_files_path", fallback="share/pool_configs"
+            "backend_pool", "config_files_path", fallback="src/cowrie/data/pool_configs"
         ),
         CowrieConfig.get("backend_pool", "guest_config", fallback="default_guest.xml"),
     )
@@ -96,17 +97,16 @@ def create_guest(connection, mac_address, guest_unique_id):
                 format="Failed to create a domain from an XML definition.",
             )
             sys.exit(1)
-
-        log.msg(
-            eventid="cowrie.backend_pool.guest_handler",
-            format="Guest %(name)s has booted",
-            name=dom.name(),
-        )
-        return dom, disk_img
     except libvirt.libvirtError as e:
         log.err(
             eventid="cowrie.backend_pool.guest_handler",
             format="Error booting guest: %(error)s",
             error=e,
         )
-        raise e
+        raise
+    log.msg(
+        eventid="cowrie.backend_pool.guest_handler",
+        format="Guest %(name)s has booted",
+        name=dom.name(),
+    )
+    return dom, disk_img

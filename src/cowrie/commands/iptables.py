@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import optparse
 
-from typing import Any, Optional
+from typing import Any
+from typing_extensions import Never
 
 from cowrie.shell.command import HoneyPotCommand
 
@@ -17,16 +18,16 @@ class OptionParsingError(RuntimeError):
 
 
 class OptionParsingExit(Exception):
-    def __init__(self, status: int, msg: Optional[str]) -> None:
+    def __init__(self, status: int, msg: str | None) -> None:
         self.msg = msg
         self.status = status
 
 
 class ModifiedOptionParser(optparse.OptionParser):
-    def error(self, msg: str) -> None:
+    def error(self, msg: str) -> Never:
         raise OptionParsingError(msg)
 
-    def exit(self, status: int = 0, msg: Optional[str] = None) -> None:
+    def exit(self, status: int = 0, msg: str | None = None) -> Never:
         raise OptionParsingExit(status, msg)
 
 
@@ -225,9 +226,9 @@ class Command_iptables(HoneyPotCommand):
             }
 
         # Get the tables
-        self.tables: dict[
-            str, dict[str, list[Any]]
-        ] = self.protocol.user.server.iptables
+        self.tables: dict[str, dict[str, list[Any]]] = (
+            self.protocol.user.server.iptables
+        )
 
         # Verify selected table
         if not self.is_valid_table(table):
@@ -244,10 +245,8 @@ class Command_iptables(HoneyPotCommand):
             # Verify table existence
             if table not in self.tables.keys():
                 self.write(
-                    """{}: can\'t initialize iptables table \'{}\': Table does not exist (do you need to insmod?)
-Perhaps iptables or your kernel needs to be upgraded.\n""".format(
-                        Command_iptables.APP_NAME, table
-                    )
+                    f"""{Command_iptables.APP_NAME}: can\'t initialize iptables table \'{table}\': Table does not exist (do you need to insmod?)
+Perhaps iptables or your kernel needs to be upgraded.\n"""
                 )
                 self.exit()
             else:
@@ -262,7 +261,7 @@ Perhaps iptables or your kernel needs to be upgraded.\n""".format(
         # Verify chain existence. Requires valid table first
         if chain not in list(self.current_table.keys()):
             self.write(
-                "%s: No chain/target/match by that name.\n" % Command_iptables.APP_NAME
+                f"{Command_iptables.APP_NAME}: No chain/target/match by that name.\n"
             )
             self.exit()
             return False
@@ -283,7 +282,7 @@ Perhaps iptables or your kernel needs to be upgraded.\n""".format(
         """
 
         self.write(
-            """{} {}'
+            f"""{Command_iptables.APP_NAME} {Command_iptables.APP_VERSION}'
 
 Usage: iptables -[AD] chain rule-specification [options]
        iptables -I chain [rulenum] rule-specification [options]
@@ -345,9 +344,7 @@ Options:
 [!] --fragment -f      match second or further fragments only
   --modprobe=<command>     try to insert modules using this command
   --set-counters PKTS BYTES    set the counter during insert/append
-[!] --version  -V      print package version.\n""".format(
-                Command_iptables.APP_NAME, Command_iptables.APP_VERSION
-            )
+[!] --version  -V      print package version.\n"""
         )
         self.exit()
 
@@ -370,7 +367,7 @@ Options:
             output = []
 
             for chain in chains:
-                output.append("-P %s ACCEPT" % chain)
+                output.append(f"-P {chain} ACCEPT")
 
             # Done
             self.write("{}\n".format("\n".join(output)))
@@ -399,14 +396,14 @@ Options:
             for chain in chains:
                 # Chain table header
                 chain_output = [
-                    "Chain %s (policy ACCEPT)" % chain,
+                    f"Chain {chain} (policy ACCEPT)",
                     "target     prot opt source               destination",
                 ]
 
                 # Format the rules
                 for rule in self.current_table[chain]:
                     chain_output.append(
-                        "%-10s %-4s %-3s %-20s %-20s %s %s" % rule,
+                        f"{rule[0]:10s} {rule[1]:4s} {rule[2]:3}s {rule[3]:20s} {rule[4]:20s} {rule[5]:s} {rule[6]:s}"
                     )
 
                 # Create one string
@@ -456,9 +453,7 @@ Options:
         """
 
         self.write(
-            "{} {}: no command specified'\nTry `iptables -h' or 'iptables --help' for more information.\n".format(
-                Command_iptables.APP_NAME, Command_iptables.APP_VERSION
-            )
+            f"{Command_iptables.APP_NAME} {Command_iptables.APP_VERSION}: no command specified'\nTry `iptables -h' or 'iptables --help' for more information.\n"
         )
         self.exit()
 
@@ -468,9 +463,7 @@ Options:
         """
 
         self.write(
-            "{} {}: unknown option '{}''\nTry `iptables -h' or 'iptables --help' for more information.\n".format(
-                Command_iptables.APP_NAME, Command_iptables.APP_VERSION, option
-            )
+            f"{Command_iptables.APP_NAME} {Command_iptables.APP_VERSION}: unknown option '{option}''\nTry `iptables -h' or 'iptables --help' for more information.\n"
         )
         self.exit()
 
@@ -480,9 +473,7 @@ Options:
         """
 
         self.write(
-            "Bad argument '{}'\nTry `iptables -h' or 'iptables --help' for more information.\n".format(
-                argument
-            )
+            f"Bad argument '{argument}'\nTry `iptables -h' or 'iptables --help' for more information.\n"
         )
         self.exit()
 

@@ -32,9 +32,10 @@ class Command_ping(HoneyPotCommand):
     def valid_ip(self, address: str) -> bool:
         try:
             socket.inet_aton(address)
-            return True
         except Exception:
             return False
+        else:
+            return True
 
     def start(self) -> None:
         self.host = ""
@@ -77,6 +78,7 @@ class Command_ping(HoneyPotCommand):
             else:
                 self.write(f"ping: unknown host {self.host}\n")
                 self.exit()
+                return
         else:
             s = hashlib.md5((self.host).encode("utf-8")).hexdigest()
             self.ip = ".".join(
@@ -91,9 +93,7 @@ class Command_ping(HoneyPotCommand):
     def showreply(self) -> None:
         ms = 40 + random.random() * 10
         self.write(
-            "64 bytes from {} ({}): icmp_seq={} ttl=50 time={:.1f} ms\n".format(
-                self.host, self.ip, self.count + 1, ms
-            )
+            f"64 bytes from {self.host} ({self.ip}): icmp_seq={self.count + 1} ttl=50 time={ms:.1f} ms\n"
         )
         self.count += 1
         if self.count == self.max:
@@ -101,14 +101,14 @@ class Command_ping(HoneyPotCommand):
             self.write("\n")
             self.printstatistics()
             self.exit()
+            return
         else:
             self.scheduled = reactor.callLater(1, self.showreply)  # type: ignore[attr-defined]
 
     def printstatistics(self) -> None:
         self.write(f"--- {self.host} ping statistics ---\n")
         self.write(
-            "%d packets transmitted, %d received, 0%% packet loss, time 907ms\n"
-            % (self.count, self.count)
+            f"{self.count} packets transmitted, {self.count} received, 0% packet loss, time 907ms\n"
         )
         self.write("rtt min/avg/max/mdev = 48.264/50.352/52.441/2.100 ms\n")
 

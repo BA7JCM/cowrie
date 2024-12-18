@@ -6,10 +6,10 @@ from __future__ import annotations
 import getopt
 import ipaddress
 import os
-from typing import Optional
+from urllib import parse
 
 from twisted.internet import error
-from twisted.python import compat, log
+from twisted.python import log
 
 import treq
 
@@ -182,8 +182,10 @@ class Command_curl(HoneyPotCommand):
     """
 
     limit_size: int = CowrieConfig.getint("honeypot", "download_limit_size", fallback=0)
-    outfile: Optional[str] = None  # outfile is the file saved inside the honeypot
-    artifact: Artifact  # artifact is the file saved for forensics in the real file system
+    outfile: str | None = None  # outfile is the file saved inside the honeypot
+    artifact: (
+        Artifact  # artifact is the file saved for forensics in the real file system
+    )
     currentlength: int = 0  # partial size during download
     totallength: int = 0  # total length
     silent: bool = False
@@ -225,7 +227,7 @@ class Command_curl(HoneyPotCommand):
 
         if "://" not in url:
             url = "http://" + url
-        urldata = compat.urllib_parse.urlparse(url)
+        urldata = parse.urlparse(url)
 
         for opt in optlist:
             if opt[0] == "-o":
@@ -254,7 +256,7 @@ class Command_curl(HoneyPotCommand):
 
         self.url = url.encode("ascii")
 
-        parsed = compat.urllib_parse.urlparse(url)
+        parsed = parse.urlparse(url)
         if parsed.scheme:
             scheme = parsed.scheme
         if scheme != "http" and scheme != "https":
@@ -347,9 +349,7 @@ class Command_curl(HoneyPotCommand):
 
         if self.outfile and not self.silent:
             self.write(
-                "\r100  {}  100  {}    0     0  {}      0 --:--:-- --:--:-- --:--:-- {}".format(
-                    self.currentlength, self.currentlength, 63673, 65181
-                )
+                f"\r100  {self.currentlength}  100  {self.currentlength}    0     0  {63673}      0 --:--:-- --:--:-- --:--:-- {65181}"
             )
 
         if not self.outfile:
@@ -365,9 +365,14 @@ class Command_curl(HoneyPotCommand):
             self.write("\n")
 
         # Update the honeyfs to point to artifact file if output is to file
-        if self.outfile:
-            self.fs.mkfile(self.outfile, 0, 0, self.currentlength, 33188)
-            self.fs.chown(self.outfile, self.protocol.user.uid, self.protocol.user.gid)
+        if self.outfile and self.protocol.user:
+            self.fs.mkfile(
+                self.outfile,
+                self.protocol.user.uid,
+                self.protocol.user.gid,
+                self.currentlength,
+                33188,
+            )
             self.fs.update_realfile(
                 self.fs.getfile(self.outfile), self.artifact.shasumFilename
             )
